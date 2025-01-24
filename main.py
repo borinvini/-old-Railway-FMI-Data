@@ -61,7 +61,7 @@ if __name__ == "__main__":
         print_memory_usage(trains_data)
 
     if 'trains_data' in locals() and not trains_data.empty:
-        display_train_details(trains_data, train_number=1, departure_date=START_DATE)
+        display_train_details(trains_data, train_number=1, departure_date=END_DATE)
 
 
     
