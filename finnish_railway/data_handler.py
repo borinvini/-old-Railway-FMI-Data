@@ -4,6 +4,26 @@ import os
 
 from misc.const import FIN_RAILWAY_ALL_TRAINS, FIN_RAILWAY_BASE_URL
 
+def get_data(endpoint, params=None):
+    """
+    Fetch data from the API endpoint with optional parameters.
+
+    Args:
+        endpoint (str): The API endpoint path.
+        params (dict, optional): Query parameters for the request.
+
+    Returns:
+        dict: JSON response from the API.
+    """
+    url = FIN_RAILWAY_BASE_URL + endpoint
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error during request: {e}")
+        return None
+    
 def load_railway_metadata(url):
     """
     Load metadata from the given API URL and return it as a DataFrame.
@@ -38,27 +58,6 @@ def load_railway_metadata(url):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return pd.DataFrame()
-    
-
-def get_data(endpoint, params=None):
-    """
-    Fetch data from the API endpoint with optional parameters.
-
-    Args:
-        endpoint (str): The API endpoint path.
-        params (dict, optional): Query parameters for the request.
-
-    Returns:
-        dict: JSON response from the API.
-    """
-    url = FIN_RAILWAY_BASE_URL + endpoint
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error during request: {e}")
-        return None
     
 def get_trains_by_date(date_str):
     """
