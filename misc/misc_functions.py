@@ -1,6 +1,6 @@
 import os
 
-from const import FOLDER_NAME
+from misc.const import FOLDER_NAME
 
 def save_dataframe_to_csv(df, csv_file):
     """
@@ -19,3 +19,13 @@ def save_dataframe_to_csv(df, csv_file):
         print(f"DataFrame successfully saved to {csv_file_path}")
     except Exception as e:
         print(f"Error saving DataFrame to {csv_file}: {e}")
+
+def print_memory_usage(dataframe):
+    """
+    Print the memory usage of a DataFrame.
+
+    Args:
+        dataframe (pd.DataFrame): The DataFrame to analyze.
+    """
+    memory_usage = dataframe.memory_usage(deep=True).sum()
+    print(f"\nMemory usage of the DataFrame: {memory_usage / (1024 * 1024):.2f} MB")

@@ -1,6 +1,6 @@
 # PARAMETERS
-START_DATE = "2024-01-01" # YYYY-MM-DD
-END_DATE = "2024-12-16" # YYYY-MM-DD
+START_DATE = "2024-12-01" # YYYY-MM-DD
+END_DATE = "2024-12-31" # YYYY-MM-DD
 CATEGORY = "Long-distance" 
 
 # URLs for the Finnish Railway API
@@ -13,4 +13,4 @@ FIN_RAILWAY_ALL_TRAINS = "/trains"
 FOLDER_NAME = "output_data"
 CSV_TRAIN_STATIONS = "train_station.csv"
 CSV_TRAIN_CATEGORIES = "train_categories.csv"
-CSV_ALL_TRAINS = "all_train_data.csv"
+CSV_ALL_TRAINS = "all_trains_data.csv"

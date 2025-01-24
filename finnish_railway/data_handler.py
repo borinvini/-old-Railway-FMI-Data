@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import os
 
-from const import FIN_RAILWAY_ALL_TRAINS, FIN_RAILWAY_BASE_URL
+from misc.const import FIN_RAILWAY_ALL_TRAINS, FIN_RAILWAY_BASE_URL
 
 def load_railway_metadata(url):
     """
@@ -70,7 +70,7 @@ def get_trains_by_date(date_str):
     Returns:
         pd.DataFrame: DataFrame containing all trains for the given date.
     """
-    from const import FIN_RAILWAY_ALL_TRAINS
+    from misc.const import FIN_RAILWAY_ALL_TRAINS
     endpoint = f"{FIN_RAILWAY_ALL_TRAINS}/{date_str}"
     trains = get_data(endpoint)
     if trains:
