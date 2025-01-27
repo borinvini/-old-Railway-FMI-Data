@@ -55,21 +55,26 @@ else:
                 index=list(unique_dates).index(START_DATE) if START_DATE in unique_dates else 0,
             )
 
-            # Filter by trainCategory with default value
-            unique_categories = train_data["trainCategory"].sort_values().unique()
-            selected_category = st.selectbox(
-                "Select Train Category",
-                options=unique_categories,
-                index=list(unique_categories).index(CATEGORY) if CATEGORY in unique_categories else 0,
-            )
+            # Create two columns for trainCategory and operatorShortCode
+            col1, col2 = st.columns(2)
 
-            # Filter by operatorShortCode with default value
-            unique_operators = train_data["operatorShortCode"].sort_values().unique()
-            selected_operator = st.selectbox(
-                "Select Operator Short Code",
-                options=unique_operators,
-                index=list(unique_operators).index(OPERATOR) if OPERATOR in unique_operators else 0,
-            )
+            # Filter by trainCategory with an "All Categories" option
+            with col1:
+                unique_categories = ["All Categories"] + list(train_data["trainCategory"].sort_values().unique())
+                selected_category = st.selectbox(
+                    "Select Train Category",
+                    options=unique_categories,
+                    index=unique_categories.index(CATEGORY) if CATEGORY in unique_categories else 0,
+                )
+
+            # Filter by operatorShortCode with an "All Operators" option
+            with col2:
+                unique_operators = ["All Operators"] + list(train_data["operatorShortCode"].sort_values().unique())
+                selected_operator = st.selectbox(
+                    "Select Operator Short Code",
+                    options=unique_operators,
+                    index=unique_operators.index(OPERATOR) if OPERATOR in unique_operators else 0,
+                )
 
             # Filter by cancelled status
             show_cancelled = st.checkbox("Show Only Cancelled Trains", value=False)
@@ -77,8 +82,8 @@ else:
             # Apply filters to the DataFrame
             filtered_data = train_data[
                 (train_data["departureDate"] == selected_date) &
-                (train_data["trainCategory"] == selected_category) &
-                (train_data["operatorShortCode"] == selected_operator) &
+                ((train_data["trainCategory"] == selected_category) if selected_category != "All Categories" else True) &
+                ((train_data["operatorShortCode"] == selected_operator) if selected_operator != "All Operators" else True) &
                 ((train_data["cancelled"] == True) if show_cancelled else (train_data["cancelled"] == train_data["cancelled"]))
             ]
 
