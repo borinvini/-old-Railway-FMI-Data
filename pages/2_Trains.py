@@ -96,6 +96,51 @@ else:
             # Additional information about the DataFrame
             st.write("Total number of rows:", filtered_data.shape[0])
             st.write("Number of columns:", filtered_data.shape[1])
+
+            # Select a specific trainNumber from the filtered data
+            if not filtered_data.empty:
+                st.subheader("Select a Train Number")
+
+                # Get the unique train numbers for the filtered date
+                unique_train_numbers = filtered_data["trainNumber"].sort_values().unique()
+
+                # Create a selectbox for train numbers
+                selected_train_number = st.selectbox(
+                    "Select Train Number",
+                    options=unique_train_numbers,
+                    index=0
+                )
+
+                # Display the timetable rows for the selected train
+                st.subheader("Time Table for Selected Train")
+                train_timetable = filtered_data.loc[
+                    filtered_data["trainNumber"] == selected_train_number, "timeTableRows"
+                ].values[0]
+
+                # Convert the timetable data to a DataFrame
+                timetable_df = pd.DataFrame(eval(train_timetable))
+
+                # Define the preferred column order
+                preferred_columns = [
+                    "stationShortCode",
+                    "type",
+                    "scheduledTime",
+                    "actualTime",
+                    "differenceInMinutes",
+                    "cancelled",
+                ]
+
+                # Reorder the columns: preferred columns first, then the rest
+                reordered_columns = preferred_columns + [
+                    col for col in timetable_df.columns if col not in preferred_columns
+                ]
+                timetable_df = timetable_df[reordered_columns]
+
+                # Display the timetable
+                st.dataframe(timetable_df, height=800, width=1000)
+            else:
+                st.warning("No timetable data available for the selected train.")
+
         else:
             st.error("The train_data DataFrame is empty.")
     except Exception as e:
