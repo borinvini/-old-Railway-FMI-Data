@@ -1,8 +1,9 @@
 import pandas as pd
 import os
 import streamlit as st
+import time
 
-from misc.const import CSV_ALL_TRAINS, FOLDER_NAME
+from misc.const import CATEGORY, CSV_ALL_TRAINS, FOLDER_NAME, OPERATOR, START_DATE
 
 # Title of the Streamlit App
 st.title("Train Data Viewer")
@@ -10,30 +11,65 @@ st.title("Train Data Viewer")
 # Path to the CSV file
 csv_file = os.path.join(FOLDER_NAME, CSV_ALL_TRAINS)  # Adjust path if necessary
 
-try:
-    # Load the DataFrame from the CSV file
-    train_data = pd.read_csv(csv_file)
-    
-    # Check if the DataFrame is not empty
-    if not train_data.empty:
-        # Session State to Reset Filters
-        if "reset" not in st.session_state:
-            st.session_state.reset = False
+# Session State to Manage Loading and Delay
+if "show_table" not in st.session_state:
+    st.session_state.show_table = False
 
-        # Reset Filters Button
-        st.subheader("Filters")
-        if st.button("Reset Filters"):
-            st.session_state.reset = True  # Trigger reset
+# If the table is not ready to be shown
+if not st.session_state.show_table:
+    # Inform the user that the CSV file is being loaded
+    st.info("Loading train data from the CSV file. Please wait...")
 
-        # Apply Filters Only If Not Reset
-        if not st.session_state.reset:
-            # Filter by departureDate
+    try:
+        # Load the DataFrame from the CSV file
+        train_data = pd.read_csv(csv_file)
+
+        # Message indicating that the loading is complete
+        st.success("Train data successfully loaded from the CSV file! 🚂")
+
+        # Introduce a delay of 3 seconds
+        time.sleep(3)
+
+        # Update session state to show the table and rerun the app
+        st.session_state.show_table = True
+        st.rerun()
+
+    except FileNotFoundError:
+        st.error(f"The CSV file '{csv_file}' was not found.")
+    except Exception as e:
+        st.error(f"An error occurred while loading the CSV file: {e}")
+
+# If the table is ready to be shown
+else:
+    try:
+        # Load the DataFrame from the CSV file
+        train_data = pd.read_csv(csv_file)
+
+        # Check if the DataFrame is not empty
+        if not train_data.empty:
+            # Filter by departureDate with default value
             unique_dates = train_data["departureDate"].sort_values().unique()
-            selected_date = st.selectbox("Select Departure Date", options=unique_dates, index=0)
+            selected_date = st.selectbox(
+                "Select Departure Date",
+                options=unique_dates,
+                index=list(unique_dates).index(START_DATE) if START_DATE in unique_dates else 0,
+            )
 
-            # Filter by trainCategory
+            # Filter by trainCategory with default value
             unique_categories = train_data["trainCategory"].sort_values().unique()
-            selected_category = st.selectbox("Select Train Category", options=unique_categories, index=0)
+            selected_category = st.selectbox(
+                "Select Train Category",
+                options=unique_categories,
+                index=list(unique_categories).index(CATEGORY) if CATEGORY in unique_categories else 0,
+            )
+
+            # Filter by operatorShortCode with default value
+            unique_operators = train_data["operatorShortCode"].sort_values().unique()
+            selected_operator = st.selectbox(
+                "Select Operator Short Code",
+                options=unique_operators,
+                index=list(unique_operators).index(OPERATOR) if OPERATOR in unique_operators else 0,
+            )
 
             # Filter by cancelled status
             show_cancelled = st.checkbox("Show Only Cancelled Trains", value=False)
@@ -42,26 +78,20 @@ try:
             filtered_data = train_data[
                 (train_data["departureDate"] == selected_date) &
                 (train_data["trainCategory"] == selected_category) &
+                (train_data["operatorShortCode"] == selected_operator) &
                 ((train_data["cancelled"] == True) if show_cancelled else (train_data["cancelled"] == train_data["cancelled"]))
             ]
+
+            # Display a small message for the data being shown
+            st.caption("Displaying filtered train data for the selected criteria.")
+
+            # Display the filtered DataFrame
+            st.dataframe(filtered_data, height=800, width=1000)
+
+            # Additional information about the DataFrame
+            st.write("Total number of rows:", filtered_data.shape[0])
+            st.write("Number of columns:", filtered_data.shape[1])
         else:
-            # Reset to the full DataFrame
-            filtered_data = train_data
-            st.session_state.reset = False  # Reset the state after showing the full DataFrame
-
-        # Limit the number of rows to display
-        max_rows_to_display = 500
-        st.subheader(f"Displaying First {max_rows_to_display} Rows of Train Data")
-
-        # Display the filtered DataFrame
-        st.dataframe(filtered_data.head(max_rows_to_display), height=800, width=1000)
-
-        # Additional information about the DataFrame
-        st.write("Total number of rows:", filtered_data.shape[0])
-        st.write("Number of columns:", filtered_data.shape[1])
-    else:
-        st.error("The train_data DataFrame is empty.")
-except FileNotFoundError:
-    st.error(f"The CSV file '{csv_file}' was not found.")
-except Exception as e:
-    st.error(f"An error occurred while loading the CSV file: {e}")
+            st.error("The train_data DataFrame is empty.")
+    except Exception as e:
+        st.error(f"An error occurred while processing the CSV file: {e}")

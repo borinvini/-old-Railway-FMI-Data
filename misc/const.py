@@ -2,6 +2,7 @@
 START_DATE = "2024-12-01" # YYYY-MM-DD
 END_DATE = "2024-12-10" # YYYY-MM-DD
 CATEGORY = "Long-distance" 
+OPERATOR = "vr"
 
 # URLs for the Finnish Railway API
 FIN_RAILWAY_BASE_URL = "https://rata.digitraffic.fi/api/v1"
