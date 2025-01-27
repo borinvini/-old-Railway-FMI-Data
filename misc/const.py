@@ -1,6 +1,6 @@
 # PARAMETERS
 START_DATE = "2024-12-01" # YYYY-MM-DD
-END_DATE = "2024-12-31" # YYYY-MM-DD
+END_DATE = "2024-12-10" # YYYY-MM-DD
 CATEGORY = "Long-distance" 
 
 # URLs for the Finnish Railway API

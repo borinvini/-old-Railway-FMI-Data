@@ -1,24 +1,60 @@
 import streamlit as st
 import pandas as pd
+import os
 from datetime import datetime, timedelta
 
 from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
 from finnish_railway.data_visualization import display_train_details
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import START_DATE, END_DATE
-from misc.const import FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FIN_RAILWAY_TRAIN_CAT
-from misc.const import CSV_TRAIN_CATEGORIES, CSV_ALL_TRAINS, CSV_TRAIN_STATIONS
-
+from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FIN_RAILWAY_TRAIN_CAT, START_DATE
+from misc.const import CSV_TRAIN_CATEGORIES, CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Streamlit App
-st.title("Finnish Railway Data Fetcher")
+st.title("Data Fetcher")
+
+st.subheader("Finnish Railway")
+
+# Check if the output_data folder is empty
+output_data_folder = FOLDER_NAME
+output_files = os.listdir(output_data_folder)
+
+if output_files:
+    # If the folder is not empty, display file names and their sizes as warnings
+    st.info("We already have train data stored in the application.", icon="ℹ️")
+    st.write("Files in output_data Folder:")
+
+    # Display file names and sizes
+    for file_name in output_files:
+        file_path = os.path.join(output_data_folder, file_name)
+        if os.path.isfile(file_path):
+            file_size = os.path.getsize(file_path) / (1024 * 1024)  # Convert size to MB
+            st.warning(f"File: `{file_name}` - Size: {file_size:.2f} MB", icon="📂")
+else:
+    # If the folder is empty
+    st.warning("The train data folder is empty. You may need to fetch new train data.", icon="⚠️")
+
+# Select date range for data fetching
+st.write("Select Date Range for Train Data Fetching")
+
+# Convert START_DATE and END_DATE to datetime
+default_start_date = datetime.strptime(START_DATE, "%Y-%m-%d")
+default_end_date = datetime.strptime(END_DATE, "%Y-%m-%d")
+
+# Date inputs for start and end dates
+start_date = st.date_input("Start Date", value=default_start_date, min_value=datetime(2000, 1, 1))
+end_date = st.date_input("End Date", value=default_end_date, min_value=start_date)
 
 # Button to fetch new data
-fetch_data = st.button("Fetch New Data from API")
+fetch_data = st.button("Fetch New Data from Finnish Railway")
 
 if fetch_data:
-    st.info("Fetching new data from the API. Please wait...")
+    st.info("Fetching new data from the API. Please wait...", icon="ℹ️")
+
+    # Validate date range
+    if start_date > end_date:
+        st.error("Error: Start Date must be before or equal to End Date.", icon="🚨")
+        st.stop()
 
     # Set the base URL for the Finnish Railway API    
     base_url = FIN_RAILWAY_BASE_URL
@@ -27,19 +63,13 @@ if fetch_data:
     api_url_path = f"{base_url}{FIN_RAILWAY_STATIONS}"
     station_metadata = load_railway_metadata(api_url_path)
     if station_metadata.empty:
-        st.error("No station metadata available. Exiting...")
+        st.error("No station metadata available. Exiting...", icon="🚨")
     else:
-        st.success("Station metadata loaded successfully.")
+        st.success("Station metadata loaded successfully.", icon="✅")
         save_dataframe_to_csv(station_metadata, CSV_TRAIN_STATIONS)
 
-    # Fetch train data from START_DATE to END_DATE
-    if isinstance(START_DATE, str) and isinstance(END_DATE, str):
-        current_date = datetime.strptime(START_DATE, "%Y-%m-%d")
-        end_date = datetime.strptime(END_DATE, "%Y-%m-%d")
-    else:
-        st.error("Error: START_DATE and END_DATE must be strings in 'YYYY-MM-DD' format.")
-        st.stop()
-
+    # Fetch train data for the selected date range
+    current_date = start_date
     all_trains_data = []
 
     while current_date <= end_date:
@@ -55,19 +85,15 @@ if fetch_data:
     # Combine all daily data into a single DataFrame
     if all_trains_data:
         trains_data = pd.concat(all_trains_data, ignore_index=True)
-        st.success(f"Fetched a total of {len(trains_data)} trains from {START_DATE} to {END_DATE}.")
+        st.success(f"Fetched a total of {len(trains_data)} trains from {start_date} to {end_date}.", icon="✅")
         save_dataframe_to_csv(trains_data, CSV_ALL_TRAINS)
 
-        # Display DataFrame information
-        st.subheader("Train DataFrame Information:")
-        st.text(trains_data.info(memory_usage="deep"))
-
         # Print memory usage of the DataFrame
-        print_memory_usage(trains_data)
+        print_memory_usage(trains_data, "trains_data")
 
         # Display details for a specific train
-        display_train_details(trains_data, train_number=1, departure_date=START_DATE)
+        display_train_details(trains_data, train_number=1, departure_date=start_date.strftime("%Y-%m-%d"))
     else:
         st.error("No train data available for the specified date range.")
 else:
-    st.write("Click the button above to fetch new data from the API.")
+    st.write("Click the button above to fetch new data from the Finnish Railway API.")

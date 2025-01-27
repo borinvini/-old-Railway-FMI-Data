@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 
 from misc.const import FOLDER_NAME
 
@@ -20,12 +21,17 @@ def save_dataframe_to_csv(df, csv_file):
     except Exception as e:
         print(f"Error saving DataFrame to {csv_file}: {e}")
 
-def print_memory_usage(dataframe):
+def print_memory_usage(dataframe, dataframe_name):
     """
-    Print the memory usage of a DataFrame.
+    Display the memory usage of a DataFrame in Streamlit, along with its name.
 
     Args:
         dataframe (pd.DataFrame): The DataFrame to analyze.
+        dataframe_name (str): The name of the DataFrame to display.
     """
+    # Message to indicate that memory calculation is in progress
+    st.write(f"Calculating memory usage for `{dataframe_name}` DataFrame...")
+    
+    # Calculate and display memory usage
     memory_usage = dataframe.memory_usage(deep=True).sum()
-    print(f"\nMemory usage of the DataFrame: {memory_usage / (1024 * 1024):.2f} MB")
+    st.write(f"**Memory usage of `{dataframe_name}` DataFrame:** {memory_usage / (1024 * 1024):.2f} MB")
