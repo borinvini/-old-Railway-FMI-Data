@@ -122,6 +122,7 @@ else:
 
                 # Define the preferred column order
                 preferred_columns = [
+                    "stationName",
                     "stationShortCode",
                     "type",
                     "scheduledTime",

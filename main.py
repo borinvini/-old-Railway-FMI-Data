@@ -49,6 +49,7 @@ end_date = st.date_input("End Date", value=default_end_date, min_value=start_dat
 # Button to fetch new data
 fetch_data = st.button("Fetch New Data from Finnish Railway")
 
+# * FETCHING RAILWAY DATA *      
 if fetch_data:
     st.info("Fetching new data from the API. Please wait...", icon="ℹ️")
 
@@ -88,46 +89,43 @@ if fetch_data:
         trains_data = pd.concat(all_trains_data, ignore_index=True)
         st.success(f"Fetched a total of {len(trains_data)} trains from {start_date} to {end_date}.", icon="✅")
 
-        # Function to extract timetable rows into a DataFrame
-        def extract_timetable_rows(rows_column):
-            timetable_rows_list = []
-            for row in rows_column:
+
+
+        # Enrich timeTableRows with stationName row by row
+        if "timeTableRows" in trains_data.columns:
+            def enrich_timetable_row(row):
                 try:
-                    # Parse the row (JSON-like string)
+                    # Parse the timeTableRows data (JSON-like string)
                     parsed_row = ast.literal_eval(row) if isinstance(row, str) else row
                     if isinstance(parsed_row, list):  # Ensure it's a list of dictionaries
-                        timetable_rows_list.extend(parsed_row)
+                        enriched_rows = []
+                        for entry in parsed_row:
+                            # Match stationShortCode with stationName from station_metadata
+                            station_name = station_metadata.loc[
+                                station_metadata["stationShortCode"] == entry["stationShortCode"], "stationName"
+                            ]
+                            # If a match is found, add the stationName to the entry
+                            station_name_value = station_name.iloc[0] if not station_name.empty else None
+                            # Create a new dictionary with stationName as the first key
+                            enriched_entry = {"stationName": station_name_value}
+                            enriched_entry.update(entry)  # Add the remaining keys/values
+                            enriched_rows.append(enriched_entry)
+                        return enriched_rows
+                    return parsed_row
                 except Exception as e:
-                    print(f"Error processing row: {e}")
-            # Create a DataFrame from the list of dictionaries
-            return pd.DataFrame(timetable_rows_list)
+                    print(f"Error processing timeTableRows: {e}")
+                    return row  # Return the original row in case of an error
 
-        # Extract timetable rows
-        if "timeTableRows" in trains_data.columns:
-            timetable_rows_data = extract_timetable_rows(trains_data["timeTableRows"])
+            # Apply the enrichment to the timeTableRows column row by row
+            trains_data["timeTableRows"] = trains_data["timeTableRows"].apply(enrich_timetable_row)
 
-            # Merge stationName into timetable_rows_data using stationShortCode as the key
-            timetable_rows_data = timetable_rows_data.merge(
-                station_metadata[["stationShortCode", "stationName"]],
-                on="stationShortCode",
-                how="left"
-            )
-
-            # Reorder columns to place stationName as the first column
-            columns_order = ["stationName"] + [col for col in timetable_rows_data.columns if col != "stationName"]
-            timetable_rows_data = timetable_rows_data[columns_order]
-
-            # Save the timetable_rows_data DataFrame to a CSV file
-            timetable_rows_csv_path = os.path.join(output_data_folder, "timetable_rows_data.csv")
-            timetable_rows_data.to_csv(timetable_rows_csv_path, index=False)
-            st.success(f"Saved timetable_rows_data to {timetable_rows_csv_path}.", icon="✅")
-
-            # Print the updated timetable_rows_data DataFrame
-            print("\nUpdated TimeTableRows Data with stationName as the first column:")
-            print(timetable_rows_data.head())
-            print(f"Updated {len(timetable_rows_data)} rows with station names.")
+            # Print some enriched timeTableRows for inspection
+            print("\nSample enriched timeTableRows with stationName as the first key:")
+            for idx, row in trains_data["timeTableRows"].head(5).items():
+                print(f"Train {idx}: {row}")
         else:
             print("No 'timeTableRows' column found in the trains_data DataFrame.")
+
 
         # Save the enriched trains_data DataFrame to CSV
         save_dataframe_to_csv(trains_data, CSV_ALL_TRAINS)
@@ -136,7 +134,7 @@ if fetch_data:
         print_memory_usage(trains_data, "trains_data")
 
         # Display details for a specific train
-        display_train_details(trains_data, train_number=1, departure_date=start_date.strftime("%Y-%m-%d"))
+        #display_train_details(trains_data, train_number=1, departure_date=start_date.strftime("%Y-%m-%d"))
     else:
         st.error("No train data available for the specified date range.")
 else:
