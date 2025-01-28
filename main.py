@@ -28,8 +28,12 @@ if output_files:
     for file_name in output_files:
         file_path = os.path.join(output_data_folder, file_name)
         if os.path.isfile(file_path):
-            file_size = os.path.getsize(file_path) / (1024 * 1024)  # Convert size to MB
-            st.warning(f"File: `{file_name}` - Size: {file_size:.2f} MB", icon="📂")
+            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)  # Convert size to MB
+            if file_size_mb > 2014:
+                file_size_gb = file_size_mb / 1024  # Convert size to GB
+                st.warning(f"File: `{file_name}` - Size: {file_size_gb:.2f} GB", icon="📂")
+            else:
+                st.warning(f"File: `{file_name}` - Size: {file_size_mb:.2f} MB", icon="📂")
 else:
     # If the folder is empty
     st.warning("The train data folder is empty. You may need to fetch new train data.", icon="⚠️")
