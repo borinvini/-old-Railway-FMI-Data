@@ -10,6 +10,10 @@ from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, START_DATE
 from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
+# Ensure the output_data folder exists
+if not os.path.exists(FOLDER_NAME):
+    os.makedirs(FOLDER_NAME)
+
 # Streamlit App
 st.title("Data Fetcher")
 
