@@ -1,15 +1,14 @@
-import streamlit as st
 import pandas as pd
 import os
+import streamlit as st
 import ast
 from datetime import datetime, timedelta
 
 from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
-from finnish_railway.data_visualization import display_train_details
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FIN_RAILWAY_TRAIN_CAT, START_DATE
-from misc.const import CSV_TRAIN_CATEGORIES, CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
+from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, START_DATE
+from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Streamlit App
 st.title("Data Fetcher")
@@ -38,18 +37,24 @@ else:
 # Select date range for data fetching
 st.write("Select Date Range for Train Data Fetching")
 
+# Use columns to display start and end date side by side
+col1, col2 = st.columns(2)
+
 # Convert START_DATE and END_DATE to datetime
 default_start_date = datetime.strptime(START_DATE, "%Y-%m-%d")
 default_end_date = datetime.strptime(END_DATE, "%Y-%m-%d")
 
-# Date inputs for start and end dates
-start_date = st.date_input("Start Date", value=default_start_date, min_value=datetime(2000, 1, 1))
-end_date = st.date_input("End Date", value=default_end_date, min_value=start_date)
+# Date inputs for start and end dates in separate columns
+with col1:
+    start_date = st.date_input("Start Date", value=default_start_date, min_value=datetime(2000, 1, 1))
+
+with col2:
+    end_date = st.date_input("End Date", value=default_end_date, min_value=start_date)
 
 # Button to fetch new data
 fetch_data = st.button("Fetch New Data from Finnish Railway")
 
-# * FETCHING RAILWAY DATA *      
+# * FETCHING RAILWAY DATA *
 if fetch_data:
     st.info("Fetching new data from the API. Please wait...", icon="ℹ️")
 
@@ -89,43 +94,51 @@ if fetch_data:
         trains_data = pd.concat(all_trains_data, ignore_index=True)
         st.success(f"Fetched a total of {len(trains_data)} trains from {start_date} to {end_date}.", icon="✅")
 
-
-
-        # Enrich timeTableRows with stationName row by row
+        # Enrich timeTableRows with stationName month by month
         if "timeTableRows" in trains_data.columns:
-            def enrich_timetable_row(row):
-                try:
-                    # Parse the timeTableRows data (JSON-like string)
-                    parsed_row = ast.literal_eval(row) if isinstance(row, str) else row
-                    if isinstance(parsed_row, list):  # Ensure it's a list of dictionaries
-                        enriched_rows = []
-                        for entry in parsed_row:
-                            # Match stationShortCode with stationName from station_metadata
-                            station_name = station_metadata.loc[
-                                station_metadata["stationShortCode"] == entry["stationShortCode"], "stationName"
-                            ]
-                            # If a match is found, add the stationName to the entry
-                            station_name_value = station_name.iloc[0] if not station_name.empty else None
-                            # Create a new dictionary with stationName as the first key
-                            enriched_entry = {"stationName": station_name_value}
-                            enriched_entry.update(entry)  # Add the remaining keys/values
-                            enriched_rows.append(enriched_entry)
-                        return enriched_rows
-                    return parsed_row
-                except Exception as e:
-                    print(f"Error processing timeTableRows: {e}")
-                    return row  # Return the original row in case of an error
+            trains_data["departureMonth"] = pd.to_datetime(trains_data["departureDate"]).dt.to_period("M")
+            months = trains_data["departureMonth"].unique()
 
-            # Apply the enrichment to the timeTableRows column row by row
-            trains_data["timeTableRows"] = trains_data["timeTableRows"].apply(enrich_timetable_row)
+            enriched_data = []
 
-            # Print some enriched timeTableRows for inspection
-            print("\nSample enriched timeTableRows with stationName as the first key:")
-            for idx, row in trains_data["timeTableRows"].head(5).items():
-                print(f"Train {idx}: {row}")
+            for month in months:
+                st.write(f"Processing data for: `{month}`. Wait...")
+                month_data = trains_data[trains_data["departureMonth"] == month]
+
+                def enrich_timetable_row(row):
+                    try:
+                        # Parse the timeTableRows data (JSON-like string)
+                        parsed_row = ast.literal_eval(row) if isinstance(row, str) else row
+                        if isinstance(parsed_row, list):  # Ensure it's a list of dictionaries
+                            enriched_rows = []
+                            for entry in parsed_row:
+                                # Match stationShortCode with stationName from station_metadata
+                                station_name = station_metadata.loc[
+                                    station_metadata["stationShortCode"] == entry["stationShortCode"], "stationName"
+                                ]
+                                # If a match is found, add the stationName to the entry
+                                station_name_value = station_name.iloc[0] if not station_name.empty else None
+                                # Create a new dictionary with stationName as the first key
+                                enriched_entry = {"stationName": station_name_value}
+                                enriched_entry.update(entry)  # Add the remaining keys/values
+                                enriched_rows.append(enriched_entry)
+                            return enriched_rows
+                        return parsed_row
+                    except Exception as e:
+                        print(f"Error processing timeTableRows: {e}")
+                        return row  # Return the original row in case of an error
+
+                # Apply the enrichment to the timeTableRows column
+                month_data["timeTableRows"] = month_data["timeTableRows"].apply(enrich_timetable_row)
+
+                enriched_data.append(month_data)
+
+            st.success(f"Data processing is done.", icon="✅")
+            # Combine enriched data
+            trains_data = pd.concat(enriched_data, ignore_index=True)
+
         else:
-            print("No 'timeTableRows' column found in the trains_data DataFrame.")
-
+            st.write("No 'timeTableRows' column found in the trains_data DataFrame.")
 
         # Save the enriched trains_data DataFrame to CSV
         save_dataframe_to_csv(trains_data, CSV_ALL_TRAINS)
@@ -133,8 +146,6 @@ if fetch_data:
         # Print memory usage of the DataFrame
         print_memory_usage(trains_data, "trains_data")
 
-        # Display details for a specific train
-        #display_train_details(trains_data, train_number=1, departure_date=start_date.strftime("%Y-%m-%d"))
     else:
         st.error("No train data available for the specified date range.")
 else:

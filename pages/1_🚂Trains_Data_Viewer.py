@@ -1,15 +1,25 @@
 import pandas as pd
 import os
 import streamlit as st
-import time
+import folium
+from streamlit_folium import st_folium
 
-from misc.const import CATEGORY, CSV_ALL_TRAINS, FOLDER_NAME, OPERATOR, START_DATE
+from misc.const import CATEGORY, CSV_ALL_TRAINS, FOLDER_NAME, OPERATOR, START_DATE, CSV_TRAIN_STATIONS
+
+# Set the page configuration
+st.set_page_config(
+    page_title="Trans Data Viewer",  # The title displayed in the browser tab
+    page_icon="🚂",                   # Optional: icon for the tab and sidebar
+    layout="wide",                    # Optional: layout mode (wide or centered)
+    initial_sidebar_state="expanded"  # Optional: expand or collapse sidebar
+)
 
 # Title of the Streamlit App
 st.title("Train Data Viewer")
 
 # Path to the CSV file
 csv_file = os.path.join(FOLDER_NAME, CSV_ALL_TRAINS)  # Adjust path if necessary
+train_stations_file = os.path.join(FOLDER_NAME, CSV_TRAIN_STATIONS)
 
 # Session State to Manage Loading and Delay
 if "show_table" not in st.session_state:
@@ -26,9 +36,6 @@ if not st.session_state.show_table:
 
         # Message indicating that the loading is complete
         st.success("Train data successfully loaded from the CSV file! 🚂")
-
-        # Introduce a delay of 3 seconds
-        time.sleep(3)
 
         # Update session state to show the table and rerun the app
         st.session_state.show_table = True
@@ -111,8 +118,20 @@ else:
                     index=0
                 )
 
+                # Display legend
+                st.subheader("Marker Legend")
+                st.markdown(
+                    """
+                    - <span style="color:blue;">**Blue**</span>: Train is on time  
+                    - <span style="color:red;">**Red**</span>: Train is delayed  
+                    - <span style="color:green;">**Green**</span>: Train is ahead of the schedule  
+                    """,
+                    unsafe_allow_html=True  # Allows HTML rendering
+                )
+
+
                 # Display the timetable rows for the selected train
-                st.subheader("Time Table for Selected Train")
+                st.subheader("Train Route Map")
                 train_timetable = filtered_data.loc[
                     filtered_data["trainNumber"] == selected_train_number, "timeTableRows"
                 ].values[0]
@@ -137,8 +156,89 @@ else:
                 ]
                 timetable_df = timetable_df[reordered_columns]
 
-                # Display the timetable
+                # Calculate the time difference at each station
+                timetable_df['actualTime'] = pd.to_datetime(timetable_df['actualTime'], errors='coerce')
+                station_times = timetable_df.groupby('stationShortCode').apply(
+                    lambda group: {
+                        "stationName": group["stationName"].iloc[0],
+                        "arrival": group.loc[group["type"] == "ARRIVAL", "actualTime"].iloc[0] if not group.loc[group["type"] == "ARRIVAL", "actualTime"].empty else None,
+                        "departure": group.loc[group["type"] == "DEPARTURE", "actualTime"].iloc[0] if not group.loc[group["type"] == "DEPARTURE", "actualTime"].empty else None,
+                    }
+                )
+
+                try:
+                    # Load train station data
+                    train_stations = pd.read_csv(train_stations_file)
+
+                    # Merge timetable_df with train_stations to get latitude and longitude
+                    timetable_with_coords = timetable_df.merge(
+                        train_stations[["stationShortCode", "latitude", "longitude"]],
+                        on="stationShortCode",
+                        how="left"
+                    )
+
+                    # Calculate the center of the map between the first and last stations
+                    first_station = timetable_with_coords.iloc[0]
+                    last_station = timetable_with_coords.iloc[-1]
+                    center_lat = (first_station["latitude"] + last_station["latitude"]) / 2
+                    center_lon = (first_station["longitude"] + last_station["longitude"]) / 2
+
+                    # Initialize a folium map centered on the midpoint
+                    train_map = folium.Map(location=[center_lat, center_lon], zoom_start=7)
+
+                    # Add markers for each station
+                    for station_code, times in station_times.items():
+                        station_coords = train_stations[train_stations['stationShortCode'] == station_code]
+                        if not station_coords.empty:
+                            latitude = station_coords['latitude'].iloc[0]
+                            longitude = station_coords['longitude'].iloc[0]
+
+                            arrival_time = times['arrival']
+                            departure_time = times['departure']
+                            time_difference = (departure_time - arrival_time).total_seconds() / 60 if arrival_time and departure_time else None
+
+                            # Determine marker color based on the rules
+                            if time_difference is None:
+                                color = "blue"  # Default color if no time difference is available
+                            elif time_difference == 0:
+                                color = "blue"
+                            elif time_difference > 0:
+                                color = "red"
+                            else:  # time_difference < 0
+                                color = "green"
+
+                            # Prepare popup information
+                            if time_difference is not None:
+                                popup_info = (
+                                    f"Station: {times['stationName']}<br>"
+                                    f"Arrival: {arrival_time}<br>"
+                                    f"Departure: {departure_time}<br>"
+                                    f"Time at station: {time_difference:.2f} minutes"
+                                )
+                            else:
+                                popup_info = (
+                                    f"Station: {times['stationName']}<br>"
+                                    f"Arrival: {arrival_time}<br>"
+                                    f"Departure: {departure_time}"
+                                )
+
+                            # Add a marker with the determined color
+                            folium.Marker(
+                                location=[latitude, longitude],
+                                popup=popup_info,
+                                icon=folium.Icon(icon="train", prefix="fa", color=color)
+                            ).add_to(train_map)
+
+                    # Display the map
+                    st_folium(train_map, height=500, width=800, returned_objects=[])
+
+                except Exception as e:
+                    st.error(f"An error occurred while plotting the map: {e}")
+
+                # Display the timetable after the map
+                st.subheader("Time Table for Selected Train")
                 st.dataframe(timetable_df, height=800, width=1000)
+
             else:
                 st.warning("No timetable data available for the selected train.")
 
