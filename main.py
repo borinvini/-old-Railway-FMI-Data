@@ -1,13 +1,16 @@
+import time
 import pandas as pd
 import os
 import streamlit as st
 import ast
 from datetime import datetime, timedelta
+from fmiopendata.wfs import download_stored_query
 
 from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
+from finnish_weather.data_handler import fetch_fmi_data
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, START_DATE
+from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
 from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Ensure the output_data folder exists
@@ -17,8 +20,6 @@ if not os.path.exists(FOLDER_NAME):
 # Streamlit App
 st.title("Data Fetcher")
 
-st.subheader("Finnish Railway")
-
 # Check if the output_data folder is empty
 output_data_folder = FOLDER_NAME
 output_files = os.listdir(output_data_folder)
@@ -26,7 +27,7 @@ output_files = os.listdir(output_data_folder)
 if output_files:
     # If the folder is not empty, display file names and their sizes as warnings
     st.info("We already have train data stored in the application.", icon="ℹ️")
-    st.write("Files in output_data Folder:")
+    st.write("Files in Output Data Folder:")
 
     # Display file names and sizes
     for file_name in output_files:
@@ -40,7 +41,7 @@ if output_files:
                 st.warning(f"File: `{file_name}` - Size: {file_size_mb:.2f} MB", icon="📂")
 else:
     # If the folder is empty
-    st.warning("The train data folder is empty. You may need to fetch new train data.", icon="⚠️")
+    st.warning("The data folder is empty. You may need to fetch new data.", icon="⚠️")
 
 # Select date range for data fetching
 st.write("Select Date Range for Train Data Fetching")
@@ -60,16 +61,19 @@ with col2:
     end_date = st.date_input("End Date", value=default_end_date, min_value=start_date)
 
 # Button to fetch new data
-fetch_data = st.button("Fetch New Data from Finnish Railway")
+fetch_data = st.button("Fetch New Data")
 
-# * FETCHING RAILWAY DATA *
+# * Fetch data from the API
 if fetch_data:
+
     st.info("Fetching new data from the API. Please wait...", icon="ℹ️")
 
     # Validate date range
     if start_date > end_date:
         st.error("Error: Start Date must be before or equal to End Date.", icon="🚨")
         st.stop()
+
+    # * FETCHING RAILWAY DATA *
 
     # Set the base URL for the Finnish Railway API    
     base_url = FIN_RAILWAY_BASE_URL
@@ -156,5 +160,77 @@ if fetch_data:
 
     else:
         st.error("No train data available for the specified date range.")
+
+    # * FETCHING FMI DATA *
+    # ! TEST
+
+    # Define the date and time range
+    date_str = "2024-12-16"  # Example date
+    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+
+    # Define the bbox variable for Finland
+    Finland_location = "bbox=18,55,35,75"
+
+    # Store all data
+    all_data = []
+
+    # Loop through the date in **6-hour intervals**
+    for hour_offset in range(0, 24, 6):
+        start_time = datetime.combine(date_obj, datetime.min.time()) + timedelta(hours=hour_offset)
+        end_time = start_time + timedelta(hours=6)
+
+        start_time_iso = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_time_iso = end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        print(f"Fetching FMI data from {start_time_iso} to {end_time_iso}")
+
+        # Store the query arguments in a variable
+        query_args = [
+            Finland_location,
+            f"starttime={start_time_iso}",
+            f"endtime={end_time_iso}"
+        ]
+        print(query_args)
+
+        # Retry mechanism for failed requests
+        retries = 3
+        while retries > 0:
+            try:
+                # Query the FMI data
+                obs = download_stored_query("fmi::observations::weather::multipointcoverage", args=query_args)
+
+                if not obs.data:
+                    print(f"No data retrieved for {start_time_iso} - {end_time_iso}")
+                    break  
+
+                # Convert to DataFrame
+                df = pd.DataFrame(sorted(obs.data.keys()), columns=["Observation Times"])
+
+                # Store data if not empty
+                if not df.empty:
+                    all_data.append(df)
+                
+                break  # Exit retry loop if successful
+            except Exception as e:
+                print(f"Retrying... ({3 - retries}/3). Error: {e}")
+                retries -= 1
+                time.sleep(2)  # Short delay before retrying
+
+    # Combine all retrieved data
+    if all_data:
+        times_df = pd.concat(all_data, ignore_index=True)
+    else:
+        times_df = pd.DataFrame(columns=["Observation Times"])  # Return empty DataFrame
+
+    # Display the DataFrame
+    print(times_df)
+
+    sizeof_df_time = times_df.shape
+    print(f"Number of rows in the DataFrame: {sizeof_df_time[0]}")
+
+    # ! TEST end
+        
+    #fmi_data = fetch_fmi_data(FMI_BBOX, start_date)
+    #print(fmi_data)
 else:
-    st.write("Click the button above to fetch new data from the Finnish Railway API.")
+    st.write("Click the button above to fetch new data from the APIs.")
