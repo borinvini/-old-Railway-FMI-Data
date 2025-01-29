@@ -10,7 +10,7 @@ from finnish_railway.data_handler import get_trains_by_date, load_railway_metada
 from finnish_weather.data_handler import fetch_fmi_data
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
+from misc.const import CSV_FMI, END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
 from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Ensure the output_data folder exists
@@ -162,75 +162,39 @@ if fetch_data:
         st.error("No train data available for the specified date range.")
 
     # * FETCHING FMI DATA *
-    # ! TEST
-
-    # Define the date and time range
-    date_str = "2024-12-16"  # Example date
-    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-
-    # Define the bbox variable for Finland
-    Finland_location = "bbox=18,55,35,75"
-
-    # Store all data
-    all_data = []
-
-    # Loop through the date in **6-hour intervals**
-    for hour_offset in range(0, 24, 6):
-        start_time = datetime.combine(date_obj, datetime.min.time()) + timedelta(hours=hour_offset)
-        end_time = start_time + timedelta(hours=6)
-
-        start_time_iso = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_time_iso = end_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        print(f"Fetching FMI data from {start_time_iso} to {end_time_iso}")
-
-        # Store the query arguments in a variable
-        query_args = [
-            Finland_location,
-            f"starttime={start_time_iso}",
-            f"endtime={end_time_iso}"
-        ]
-        print(query_args)
-
-        # Retry mechanism for failed requests
-        retries = 3
-        while retries > 0:
-            try:
-                # Query the FMI data
-                obs = download_stored_query("fmi::observations::weather::multipointcoverage", args=query_args)
-
-                if not obs.data:
-                    print(f"No data retrieved for {start_time_iso} - {end_time_iso}")
-                    break  
-
-                # Convert to DataFrame
-                df = pd.DataFrame(sorted(obs.data.keys()), columns=["Observation Times"])
-
-                # Store data if not empty
-                if not df.empty:
-                    all_data.append(df)
-                
-                break  # Exit retry loop if successful
-            except Exception as e:
-                print(f"Retrying... ({3 - retries}/3). Error: {e}")
-                retries -= 1
-                time.sleep(2)  # Short delay before retrying
-
-    # Combine all retrieved data
-    if all_data:
-        times_df = pd.concat(all_data, ignore_index=True)
-    else:
-        times_df = pd.DataFrame(columns=["Observation Times"])  # Return empty DataFrame
-
-    # Display the DataFrame
-    print(times_df)
-
-    sizeof_df_time = times_df.shape
-    print(f"Number of rows in the DataFrame: {sizeof_df_time[0]}")
-
-    # ! TEST end
         
-    #fmi_data = fetch_fmi_data(FMI_BBOX, start_date)
-    #print(fmi_data)
+    all_fmi_data = []  # List to store data for each day
+
+    current_date = start_date
+
+    while current_date <= end_date:
+        st.write(f"Fetching FMI data for {current_date}...")
+
+        # Call fetch_fmi_data for the current date
+        daily_fmi_data = fetch_fmi_data(FMI_BBOX, current_date)
+
+        if not daily_fmi_data.empty:
+            all_fmi_data.append(daily_fmi_data)  # Store the retrieved data
+            #st.success(f"Weather data retrieved for {current_date}", icon="✅")
+        else:
+            st.warning(f"No weather data available for {current_date}", icon="⚠️")
+
+        # Move to the next day
+        current_date += timedelta(days=1)
+
+    # Combine all fetched data into a single DataFrame
+    if all_fmi_data:
+        fmi_data_combined = pd.concat(all_fmi_data, ignore_index=True)
+        st.success(f"Fetched FMI data from {start_date} to {end_date}.", icon="✅")
+
+        # Print memory usage of the DataFrame
+        print_memory_usage(fmi_data_combined, "fmi_data_combined")
+
+        # Save the weather data to CSV
+        save_dataframe_to_csv(fmi_data_combined, CSV_FMI)
+
+    else:
+        st.error("No FMI weather data available for the selected date range.", icon="🚨")
+
 else:
     st.write("Click the button above to fetch new data from the APIs.")

@@ -22,4 +22,5 @@ FOLDER_NAME = "output_data"
 CSV_TRAIN_STATIONS = "train_station.csv"
 CSV_TRAIN_CATEGORIES = "train_categories.csv"
 CSV_ALL_TRAINS = "all_trains_data.csv"
+CSV_FMI = "fmi_weather_observations.csv"
 

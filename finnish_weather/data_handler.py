@@ -1,76 +1,77 @@
 import pandas as pd
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from fmiopendata.wfs import download_stored_query
 
 from misc.const import FMI_OBSERVATIONS
 
-def fetch_fmi_data(location, date):
+
+def fetch_fmi_data(location, date, max_retries=3):
     """
-    Fetches weather observation data from the Finnish Meteorological Institute (FMI) for a single date in 6-hour chunks.
+    Fetches weather observation data from the Finnish Meteorological Institute (FMI) for a single date.
 
     Parameters:
         location (str): Bounding box coordinates (e.g., "18,55,35,75" for Finland).
         date (datetime.date): The date for which to fetch weather data (YYYY-MM-DD).
+        max_retries (int): Maximum number of retries in case of connection failures.
 
     Returns:
-        pd.DataFrame: DataFrame containing weather observations for the given date.
+        pd.DataFrame: DataFrame containing full weather observations for the given date.
     """
     try:
-        all_data = []
-        
-        # Split the request into 6-hour chunks to reduce the load
-        for hour_offset in range(0, 24, 6):
-            start_time = datetime.combine(date, datetime.min.time()) + timedelta(hours=hour_offset)
-            end_time = start_time + timedelta(hours=6)  # 6-hour intervals
+        # Convert date to string and format to ISO 8601 (UTC format)
+        date_start_iso = datetime.combine(date, datetime.min.time()).isoformat() + "Z"
+        date_end_iso = datetime.combine(date, datetime.max.time()).replace(microsecond=0).isoformat() + "Z"
 
-            # Convert to ISO format as required by FMI
-            start_time_iso = start_time.isoformat(timespec="seconds") + "Z"
-            end_time_iso = end_time.isoformat(timespec="seconds") + "Z"
+        print(f"Fetching FMI data for {date} ({date_start_iso} - {date_end_iso})")
 
-            print(f"Fetching FMI data from {start_time_iso} to {end_time_iso}")
+        # Introduce a delay to avoid overwhelming the API
+        time.sleep(30)
 
-            # Construct the query arguments in the correct format
-            query_args = [
-                f"bbox={location}",
-                f"starttime={start_time_iso}",
-                f"endtime={end_time_iso}"
-            ]
-            print("Query Arguments:", query_args)
+        # Construct the query arguments
+        query_args = [
+            f"bbox={location}",
+            f"starttime={date_start_iso}",
+            f"endtime={date_end_iso}"
+        ]
 
-            # Attempt the request with retries
-            retries = 3
-            while retries > 0:
-                try:
-                    # Correctly format the query
-                    obs = download_stored_query(FMI_OBSERVATIONS, args=query_args)
+        attempt = 1
+        while attempt <= max_retries:
+            try:
+                # Query the FMI data
+                obs = download_stored_query(FMI_OBSERVATIONS, args=query_args)
 
-                    # 🔹 Check if obs is empty
-                    if not obs:
-                        print(f"No data received for {start_time_iso} - {end_time_iso}")
-                        break
+                # Check if data is available
+                if not obs.data:
+                    print(f"No data retrieved for {date}")
+                    return pd.DataFrame()
 
-                    print(f"Response type: {type(obs)}")
+                # Convert response to DataFrame
+                data = []
+                for timestamp, variables in obs.data.items():
+                    row = {"timestamp": timestamp}  # Add timestamp as a column
+                    row.update(variables)  # Add all observed variables
+                    data.append(row)
 
-                    # Convert response to DataFrame properly
-                    df = pd.DataFrame(obs)
+                df = pd.DataFrame(data)
 
-                    if not df.empty:
-                        all_data.append(df)
+                # Convert timestamp to datetime format
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-                    break  # Break if successful
-                except Exception as e:
-                    print(f"Retrying... ({3 - retries}/3). Error: {e}")
-                    retries -= 1
-                    time.sleep(2)  # Short delay before retrying
+                return df  # Return the full dataset
 
-        # Combine all retrieved data
-        if all_data:
-            return pd.concat(all_data, ignore_index=True)
+            except Exception as e:
+                print(f"Attempt {attempt} failed: {e}")
+                if attempt < max_retries:
+                    wait_time = 10 * attempt  # Exponential backoff (10s, 20s, 30s)
+                    print(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"Failed to fetch data after {max_retries} attempts. Skipping {date}.")
+                    return pd.DataFrame()
 
-        print("No data retrieved.")
-        return pd.DataFrame()
+            attempt += 1
 
     except Exception as e:
-        print(f"Error fetching FMI data: {e}")
+        print(f"Unexpected error fetching FMI data: {e}")
         return pd.DataFrame()
