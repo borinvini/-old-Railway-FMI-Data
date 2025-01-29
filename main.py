@@ -162,7 +162,7 @@ if fetch_data:
         st.error("No train data available for the specified date range.")
 
     # * FETCHING FMI DATA *
-        
+    # TODO Interpolate missing data in the FMI DataFrame    
     all_fmi_data = []  # List to store data for each day
 
     current_date = start_date
