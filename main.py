@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
 from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
-from finnish_weather.data_handler import fetch_fmi_data
+from finnish_weather.data_handler import fetch_fmi_data, interpolate_ems_data, transform_fmi_data
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import CSV_FMI, END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
+from misc.const import CSV_FMI, CSV_FMI_EMS, END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
 from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Ensure the output_data folder exists
@@ -162,8 +162,9 @@ if fetch_data:
         st.error("No train data available for the specified date range.")
 
     # * FETCHING FMI DATA *
-    # TODO Interpolate missing data in the FMI DataFrame    
-    all_fmi_data = []  # List to store data for each day
+    # TODO Interpolate data??
+    all_fmi_data = []  # List to store weather data for each day
+    ems_metadata = []  # List to store station metadata (only once)
 
     current_date = start_date
 
@@ -171,11 +172,15 @@ if fetch_data:
         st.write(f"Fetching FMI data for {current_date}...")
 
         # Call fetch_fmi_data for the current date
-        daily_fmi_data = fetch_fmi_data(FMI_BBOX, current_date)
+        daily_fmi_data, daily_ems_metadata = fetch_fmi_data(FMI_BBOX, current_date)
 
         if not daily_fmi_data.empty:
-            all_fmi_data.append(daily_fmi_data)  # Store the retrieved data
-            #st.success(f"Weather data retrieved for {current_date}", icon="✅")
+            all_fmi_data.append(daily_fmi_data)  # Store the retrieved weather data
+
+            # Store metadata only if it's the first call (it remains constant)
+            if not ems_metadata:
+                ems_metadata.append(daily_ems_metadata)
+
         else:
             st.warning(f"No weather data available for {current_date}", icon="⚠️")
 
@@ -185,16 +190,38 @@ if fetch_data:
     # Combine all fetched data into a single DataFrame
     if all_fmi_data:
         fmi_data_combined = pd.concat(all_fmi_data, ignore_index=True)
-        st.success(f"Fetched FMI data from {start_date} to {end_date}.", icon="✅")
 
-        # Print memory usage of the DataFrame
-        print_memory_usage(fmi_data_combined, "fmi_data_combined")
+        #st.write("Removing duplicates and interpolating data... Please wait.")
 
-        # Save the weather data to CSV
-        save_dataframe_to_csv(fmi_data_combined, CSV_FMI)
+        # Drop duplicate timestamps and interpolate data
+        #fmi_data_combined = fmi_data_combined.drop_duplicates(subset=["timestamp"])
+        #fmi_data_interpolated = interpolate_ems_data(fmi_data_combined)
+
+        #st.write("Transforming FMI data for structured storage... Please wait.")
+
+        # Transform data before saving
+        fmi_data_transformed = transform_fmi_data(fmi_data_combined)
+
+        st.write("Data manipulation completed.")
+
+        st.success(f"Fetched and processed FMI data from {start_date} to {end_date}.", icon="✅")
+
+        # Print memory usage of the transformed DataFrame
+        print_memory_usage(fmi_data_transformed, "fmi_data_transformed")
+
+        # Save the transformed weather data to CSV
+        save_dataframe_to_csv(fmi_data_transformed, CSV_FMI)
+
+        # Save the EMS metadata (only once)
+        if ems_metadata:
+            ems_metadata_combined = pd.concat(ems_metadata, ignore_index=True)
+            save_dataframe_to_csv(ems_metadata_combined, CSV_FMI_EMS)
+            st.success("Station metadata saved successfully.", icon="✅")
 
     else:
         st.error("No FMI weather data available for the selected date range.", icon="🚨")
+
+
 
 else:
     st.write("Click the button above to fetch new data from the APIs.")

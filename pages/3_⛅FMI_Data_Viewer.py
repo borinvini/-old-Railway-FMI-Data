@@ -48,11 +48,11 @@ else:
         selected_date = st.selectbox("Select a date:", unique_dates)
         
         # Get EMS names from columns (excluding timestamp), sort them alphabetically, and add "All EMS" option
-        ems_names = ["All EMS"] + sorted(list(fmi_data.columns[1:]))
+        ems_names = ["All EMS"] + sorted([col for col in fmi_data.columns if col not in ["timestamp", "date"]])
         selected_ems = st.selectbox("Select an EMS:", ems_names)
         
         # Filter data by the selected date
-        filtered_data = fmi_data[fmi_data["date"] == selected_date]
+        filtered_data = fmi_data[fmi_data["date"] == selected_date].drop(columns=["date"])  # Remove 'date' column
         
         # If a specific EMS is selected, filter only that column
         if selected_ems != "All EMS":
