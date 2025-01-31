@@ -6,11 +6,12 @@ import ast
 from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
+from cross_data.cross_functions import match_train_with_ems, merge_train_weather_data
 from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
-from finnish_weather.data_handler import fetch_fmi_data, interpolate_ems_data, transform_fmi_data
+from finnish_weather.data_handler import clean_fmi_data, fetch_fmi_data, interpolate_ems_data
 from misc.misc_functions import print_memory_usage, save_dataframe_to_csv
 
-from misc.const import CSV_FMI, CSV_FMI_EMS, END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
+from misc.const import CSV_CROSS_DATA, CSV_CROSS_STATIONS, CSV_FMI, CSV_FMI_EMS, END_DATE, FIN_RAILWAY_BASE_URL, FIN_RAILWAY_STATIONS, FMI_BBOX, START_DATE
 from misc.const import CSV_ALL_TRAINS, CSV_TRAIN_STATIONS, FOLDER_NAME
 
 # Ensure the output_data folder exists
@@ -61,7 +62,9 @@ with col2:
     end_date = st.date_input("End Date", value=default_end_date, min_value=start_date)
 
 # Button to fetch new data
-fetch_data = st.button("Fetch New Data")
+fetch_data = st.button("Fetch and Process New Data ")
+
+process_data = st.button("Only Process Data ")
 
 # * Fetch data from the API
 if fetch_data:
@@ -191,26 +194,18 @@ if fetch_data:
     if all_fmi_data:
         fmi_data_combined = pd.concat(all_fmi_data, ignore_index=True)
 
-        #st.write("Removing duplicates and interpolating data... Please wait.")
-
-        # Drop duplicate timestamps and interpolate data
-        #fmi_data_combined = fmi_data_combined.drop_duplicates(subset=["timestamp"])
-        #fmi_data_interpolated = interpolate_ems_data(fmi_data_combined)
-
-        #st.write("Transforming FMI data for structured storage... Please wait.")
-
-        # Transform data before saving
-        fmi_data_transformed = transform_fmi_data(fmi_data_combined)
+        # Drop duplicates based on timestamp and station_name
+        fmi_data_combined = clean_fmi_data(fmi_data_combined)
 
         st.write("Data manipulation completed.")
 
         st.success(f"Fetched and processed FMI data from {start_date} to {end_date}.", icon="✅")
 
         # Print memory usage of the transformed DataFrame
-        print_memory_usage(fmi_data_transformed, "fmi_data_transformed")
+        print_memory_usage(fmi_data_combined, "fmi_data_final")
 
         # Save the transformed weather data to CSV
-        save_dataframe_to_csv(fmi_data_transformed, CSV_FMI)
+        save_dataframe_to_csv(fmi_data_combined, CSV_FMI)
 
         # Save the EMS metadata (only once)
         if ems_metadata:
@@ -221,7 +216,13 @@ if fetch_data:
     else:
         st.error("No FMI weather data available for the selected date range.", icon="🚨")
 
+    matched_stations_df = match_train_with_ems(station_metadata, ems_metadata_combined)
+    save_dataframe_to_csv(matched_stations_df, CSV_CROSS_STATIONS)
+    print(matched_stations_df.head())
 
+    updated_trains_df = merge_train_weather_data(trains_data, fmi_data_combined, matched_stations_df)
+    save_dataframe_to_csv(updated_trains_df, CSV_CROSS_DATA)
 
 else:
     st.write("Click the button above to fetch new data from the APIs.")
+

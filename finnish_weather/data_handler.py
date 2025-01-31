@@ -4,9 +4,10 @@ from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
 from misc.const import FMI_OBSERVATIONS, FMI_EMS
+from misc.misc_functions import log_message
 
 
-def fetch_fmi_data(location, date, max_retries=3):
+def fetch_fmi_data(location, date, max_retries=3, log_file="fmi_fetch.log"):
     """
     Fetches weather observation data and station metadata from the Finnish Meteorological Institute (FMI)
     for a single date in 1-hour chunks.
@@ -15,6 +16,7 @@ def fetch_fmi_data(location, date, max_retries=3):
         location (str): Bounding box coordinates (e.g., "18,55,35,75" for Finland).
         date (datetime.date): The date for which to fetch weather data (YYYY-MM-DD).
         max_retries (int): Maximum number of retries in case of connection failures.
+        log_file (str): Path to the log file.
 
     Returns:
         pd.DataFrame: DataFrame containing full weather observations for the given date.
@@ -51,7 +53,7 @@ def fetch_fmi_data(location, date, max_retries=3):
 
                 # Check if data is available
                 if not obs.data:
-                    print(f"No data retrieved for {start_time.strftime('%Y-%m-%d %H:%M')} - Skipping")
+                    log_message(f"No data retrieved for {start_time.strftime('%Y-%m-%d %H:%M')} - Skipping", log_file)
                     break  # Move to next hour
 
                 # Extract station metadata (only once)
@@ -73,13 +75,13 @@ def fetch_fmi_data(location, date, max_retries=3):
                 break  # Successful request, move to the next hour
 
             except Exception as e:
-                print(f"Attempt {attempt} failed for {start_time_iso}: {e}")
+                log_message(f"Attempt {attempt} failed for {start_time_iso}: {e}", log_file)
                 if attempt < max_retries:
                     wait_time = 10 * attempt  # Exponential backoff (10s, 20s, 30s)
-                    print(f"Retrying in {wait_time} seconds...")
+                    log_message(f"Retrying in {wait_time} seconds...", log_file)
                     time.sleep(wait_time)
                 else:
-                    print(f"Skipping {start_time.strftime('%Y-%m-%d %H:%M')} after {max_retries} failed attempts.")
+                    log_message(f"Skipping {start_time.strftime('%Y-%m-%d %H:%M')} after {max_retries} failed attempts.", log_file)
 
             attempt += 1
 
@@ -115,37 +117,27 @@ def interpolate_ems_data(df):
     return df
 
 
-def transform_fmi_data(df):
+def clean_fmi_data(df):
     """
-    Transforms the FMI data by keeping the timestamp as the first column,
-    converting station names into individual columns, and storing measurements
-    in dictionaries for each row.
+    Cleans the FMI dataset by:
+    1. Removing duplicate entries based on timestamp and station_name.
+    2. Reordering columns: station_name first, timestamp second, followed by all other columns.
+    3. Sorting by station_name and timestamp.
 
     Parameters:
-        df (pd.DataFrame): Original FMI data with 'station_name' and measurements.
+        df (pd.DataFrame): The original FMI DataFrame.
 
     Returns:
-        pd.DataFrame: Transformed DataFrame with one column per station and measurements as dictionaries.
+        pd.DataFrame: The cleaned and ordered FMI DataFrame.
     """
-    # Drop duplicate rows (keeping the first occurrence)
-    df = df.drop_duplicates(subset=["timestamp", "station_name"])
+    # Drop duplicates based on timestamp and station_name
+    df = df.drop_duplicates(subset=["timestamp", "station_name"], keep="first")
 
-    # Ensure timestamp is in datetime format
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # Reorder columns: station_name first, timestamp second, followed by the rest
+    columns_order = ["station_name", "timestamp"] + [col for col in df.columns if col not in ["station_name", "timestamp"]]
+    df = df[columns_order]
 
-    # Create a pivot table with timestamp as index and station_name as columns
-    transformed_df = df.pivot(index="timestamp", columns="station_name")
+    # Sort by station_name and timestamp
+    df = df.sort_values(by=["station_name", "timestamp"])
 
-    # Convert MultiIndex columns into a dictionary for each timestamp
-    transformed_df = (
-        transformed_df.stack(level=0)
-        .groupby(level=0)
-        .apply(lambda x: {station: {key: value for key, value in data.items() if key != "timestamp"}
-                          for station, data in x.to_dict(orient="index").items()})
-        .reset_index()
-    )
-
-    # Rename columns for clarity
-    transformed_df.columns = ["timestamp", "station_measurements"]
-
-    return transformed_df
+    return df

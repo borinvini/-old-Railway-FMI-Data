@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import streamlit as st
 
 from misc.const import FOLDER_NAME
@@ -35,3 +36,25 @@ def print_memory_usage(dataframe, dataframe_name):
     # Calculate and display memory usage
     memory_usage = dataframe.memory_usage(deep=True).sum()
     st.write(f"**Memory usage of `{dataframe_name}` DataFrame:** {memory_usage / (1024 * 1024):.2f} MB")
+
+
+def log_message(message, log_file="application.log"):
+    """
+    Logs a message to a specified log file.
+
+    Parameters:
+        message (str): The message to log.
+        log_file (str): The log file path (default: "application.log").
+
+    Returns:
+        None
+    """
+    # Ensure the log file exists
+    if not os.path.exists(log_file):
+        with open(log_file, "w") as file:
+            file.write("Log File Created - " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+
+    # Append the log message with a timestamp
+    with open(log_file, "a") as file:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        file.write(f"[{timestamp}] {message}\n")

@@ -25,4 +25,6 @@ CSV_TRAIN_CATEGORIES = "train_categories.csv"
 CSV_ALL_TRAINS = "all_trains_data.csv"
 CSV_FMI = "fmi_weather_observations.csv"
 CSV_FMI_EMS = "fmi_ems_stations.csv"
+CSV_CROSS_STATIONS = "cross_stations.csv"
+CSV_CROSS_DATA = "cross_data.csv"
 
