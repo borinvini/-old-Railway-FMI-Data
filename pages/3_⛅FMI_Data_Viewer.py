@@ -46,20 +46,22 @@ else:
         # Get unique dates for the selectbox
         unique_dates = fmi_data["date"].unique()
         selected_date = st.selectbox("Select a date:", unique_dates)
-        
-        # Get EMS names from columns (excluding timestamp), sort them alphabetically, and add "All EMS" option
-        ems_names = ["All EMS"] + sorted([col for col in fmi_data.columns if col not in ["timestamp", "date"]])
-        selected_ems = st.selectbox("Select an EMS:", ems_names)
-        
+
+        # Extract unique station names from the 'station_name' column
+        unique_stations = ["All EMS"] + sorted(fmi_data["station_name"].unique())
+
+        # Selectbox for EMS stations
+        selected_station = st.selectbox("Select an EMS Station:", unique_stations)
+
         # Filter data by the selected date
         filtered_data = fmi_data[fmi_data["date"] == selected_date].drop(columns=["date"])  # Remove 'date' column
         
-        # If a specific EMS is selected, filter only that column
-        if selected_ems != "All EMS":
-            filtered_data = filtered_data[["timestamp", selected_ems]]
-        
+        # If a specific EMS station is selected, filter only that station
+        if selected_station != "All EMS":
+            filtered_data = filtered_data[filtered_data["station_name"] == selected_station]
+
         # Display the filtered data
-        st.subheader(f"Data for {selected_date} - EMS: {selected_ems}")
+        st.subheader(f"Data for {selected_date} - EMS Station: {selected_station}")
         st.dataframe(filtered_data)
         
         # Additional information about the DataFrame

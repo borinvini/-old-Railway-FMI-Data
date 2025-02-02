@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import streamlit as st
 import ast
+from playsound import playsound
 from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
@@ -166,6 +167,13 @@ if fetch_data:
 
     # * FETCHING FMI DATA *
     # TODO Interpolate data??
+
+    # Play the MP3 file
+    mp3_path = os.path.join("misc", "step.mp3")
+    playsound(mp3_path)
+    playsound(mp3_path)
+    playsound(mp3_path)
+
     all_fmi_data = []  # List to store weather data for each day
     ems_metadata = []  # List to store station metadata (only once)
 
@@ -216,12 +224,27 @@ if fetch_data:
     else:
         st.error("No FMI weather data available for the selected date range.", icon="🚨")
 
+    # Play the MP3 file
+    mp3_path = os.path.join("misc", "step.mp3")
+    playsound(mp3_path)
+    playsound(mp3_path)
+    playsound(mp3_path)
+    playsound(mp3_path)
+    playsound(mp3_path)
+
     matched_stations_df = match_train_with_ems(station_metadata, ems_metadata_combined)
     save_dataframe_to_csv(matched_stations_df, CSV_CROSS_STATIONS)
     print(matched_stations_df.head())
 
+
     updated_trains_df = merge_train_weather_data(trains_data, fmi_data_combined, matched_stations_df)
     save_dataframe_to_csv(updated_trains_df, CSV_CROSS_DATA)
+
+    print("EXECUTION COMPLETE!")
+
+    # Play the MP3 file
+    mp3_path = os.path.join("misc", "end.mp3")
+    playsound(mp3_path)
 
 else:
     st.write("Click the button above to fetch new data from the APIs.")

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from haversine import haversine, Unit
 from datetime import datetime, timedelta
 
@@ -67,9 +68,6 @@ def match_train_with_ems(train_stations: pd.DataFrame, ems_stations: pd.DataFram
 
     return train_stations
 
-import pandas as pd
-from datetime import datetime
-
 def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, matched_stations_df: pd.DataFrame) -> pd.DataFrame:
     """
     Merges train timetable data with the closest EMS weather observations.
@@ -83,15 +81,18 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
         pd.DataFrame: Updated trains_data DataFrame with weather observations merged into timetable records.
     """
 
-    # Copy trains_data to avoid modifying the original
-    updated_trains_data = trains_data.copy()
+    # Ensure timestamp is in datetime format (convert inplace to avoid copies)
+    fmi_data["timestamp"] = pd.to_datetime(fmi_data["timestamp"], errors="coerce")
 
-    # Ensure timestamp column is in datetime format
-    fmi_data["timestamp"] = pd.to_datetime(fmi_data["timestamp"])
+    # **Precompute EMS weather data in a dictionary for quick lookups**
+    ems_weather_dict = {
+        station: df.sort_values(by="timestamp").reset_index(drop=True)
+        for station, df in fmi_data.groupby("station_name")
+    }
 
     def find_closest_weather(ems_station, scheduled_time):
         """
-        Finds the closest weather observation for a given EMS station and scheduled time.
+        Finds the closest weather observation.
 
         Parameters:
             ems_station (str): The closest EMS station name.
@@ -102,31 +103,59 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
         """
         # Convert scheduled time to datetime
         scheduled_time_dt = datetime.strptime(scheduled_time, "%Y-%m-%dT%H:%M:%S.%fZ")
-
-        # Ensure station names are stripped of leading/trailing spaces
-        fmi_data["station_name"] = fmi_data["station_name"].str.strip()
-        ems_station = ems_station.strip()
-
-        # Filter FMI data by station name
-        ems_weather_data = fmi_data[fmi_data["station_name"] == ems_station].copy()
-
-        if ems_weather_data.empty:
+        #print(f"   Scheduled Time (DT): {scheduled_time_dt}")
+        
+        # Ensure station exists in precomputed dictionary
+        if ems_station not in ems_weather_dict:
             print(f"🚨 No weather data available for EMS '{ems_station}'")
             return {}
 
-        # Find the closest timestamp
-        ems_weather_data["time_diff"] = abs(ems_weather_data["timestamp"] - scheduled_time_dt)
-        closest_row = ems_weather_data.loc[ems_weather_data["time_diff"].idxmin()]
+        # Get precomputed DataFrame for the EMS station
+        station_weather_df = ems_weather_dict[ems_station]
 
-        # Extract weather observations (drop station_name and timestamp)
+        # **Ensure all timestamps are properly formatted as datetime**
+        station_weather_df["timestamp"] = pd.to_datetime(station_weather_df["timestamp"], errors="coerce")
+
+        # **Filter out NaT values caused by parsing errors**
+        station_weather_df = station_weather_df.dropna(subset=["timestamp"])
+
+        # Convert timestamps to a sorted numpy datetime64 array for efficient searching
+        timestamps = station_weather_df["timestamp"].to_numpy(dtype="datetime64[ns]")
+
+        # **Ensure scheduled_time_dt is also converted to numpy datetime64**
+        scheduled_time_np = np.datetime64(scheduled_time_dt)
+        #print(f" Scheduled Time (np): {scheduled_time_np}")
+
+        # **Use np.searchsorted for fast timestamp lookup**
+        idx = np.searchsorted(timestamps, scheduled_time_np)
+
+        # Handle edge cases for boundary timestamps
+        if idx == 0:
+            closest_idx = 0
+        elif idx >= len(timestamps):
+            closest_idx = len(timestamps) - 1
+        else:
+            # Compare previous and next timestamps, choose the closest
+            before = abs(timestamps[idx - 1] - scheduled_time_np)
+            after = abs(timestamps[idx] - scheduled_time_np)
+            closest_idx = idx if after < before else idx - 1
+
+        # Extract weather data from the closest timestamp
+        closest_row = station_weather_df.iloc[closest_idx]
+        #print(f"   Closest Timestamp: {closest_row['timestamp']}")
+
+        # **Keep the station name and rename it to closest_ems**
         weather_dict = closest_row.drop(["station_name", "timestamp"]).to_dict()
+
+        # **Reorder the dictionary to place 'closest_ems' as the second key**
+        weather_dict = {"closest_ems": closest_row["station_name"], **weather_dict}
 
         return weather_dict
 
-    total_trains = len(updated_trains_data)
+    total_trains = len(trains_data)
 
-    # Iterate over each train in the dataset
-    for idx, train_row in enumerate(updated_trains_data.itertuples(), start=1):
+    # **Use itertuples for faster iteration over DataFrame**
+    for idx, train_row in enumerate(trains_data.itertuples(index=False), start=1):
         train_number = train_row.trainNumber
         departure_date = train_row.departureDate
         print(f"🚆 Processing Train {idx}/{total_trains} - Train {train_number} on {departure_date}...")
@@ -137,7 +166,8 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
         for train_track in timetable:
             station_short_code = train_track.get("stationShortCode")
             scheduled_time = train_track.get("scheduledTime")
-
+            #print(f"Scheduled Time: {scheduled_time} - Station: {station_short_code}")
+            
             if station_short_code and scheduled_time:
                 # Find the closest EMS station for this train station
                 closest_ems_row = matched_stations_df.loc[
@@ -146,9 +176,11 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
 
                 if not closest_ems_row.empty:
                     closest_ems_station = closest_ems_row.iloc[0]["closest_ems_station"]
+                    #print(f"   Closest EMS Station: {closest_ems_station}")
 
                     # Find the closest weather data for this EMS station and scheduled time
                     weather_data = find_closest_weather(closest_ems_station, scheduled_time)
+                    #print(f"   Weather Data: {weather_data}")
 
                     if not weather_data:
                         print(f"   ⚠️ No weather data available for {closest_ems_station} at {scheduled_time}")
@@ -158,4 +190,4 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
 
         print(f"✅ Train {idx}/{total_trains} - Train {train_number} processing complete!\n")
 
-    return updated_trains_data
+    return trains_data
