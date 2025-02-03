@@ -64,7 +64,7 @@ with col2:
 # Button to fetch new data
 fetch_data = st.button("Fetch and Process New Data ")
 
-process_data = st.button("Only Process Data ")
+#process_data = st.button("Only Process Data ")
 
 # * Fetch data from the API
 if fetch_data:
@@ -230,4 +230,3 @@ if fetch_data:
 
 else:
     st.write("Click the button above to fetch new data from the APIs.")
-
