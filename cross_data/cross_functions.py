@@ -81,6 +81,12 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
         pd.DataFrame: Updated trains_data DataFrame with weather observations merged into timetable records.
     """
 
+    # Extract unique departure dates
+    unique_dates = trains_data["departureDate"].unique()
+    print(f"🔹 Processing train and weather data for {len(unique_dates)} departure dates:")
+    for date in unique_dates:
+        print(f"   📅 Processing data for departure date: {date}")
+
     # Ensure timestamp is in datetime format (convert inplace to avoid copies)
     fmi_data["timestamp"] = pd.to_datetime(fmi_data["timestamp"], errors="coerce")
 
@@ -158,7 +164,7 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
     for idx, train_row in enumerate(trains_data.itertuples(index=False), start=1):
         train_number = train_row.trainNumber
         departure_date = train_row.departureDate
-        print(f"🚆 Processing Train {idx}/{total_trains} - Train {train_number} on {departure_date}...")
+        #print(f"🚆 Processing Train {idx}/{total_trains} - Train {train_number} on {departure_date}...")
 
         timetable = train_row.timeTableRows
 
@@ -188,6 +194,6 @@ def merge_train_weather_data(trains_data: pd.DataFrame, fmi_data: pd.DataFrame, 
                     # Merge weather data into the stop dictionary
                     train_track["weather_observations"] = weather_data
 
-        print(f"✅ Train {idx}/{total_trains} - Train {train_number} processing complete!\n")
+        #print(f"✅ Train {idx}/{total_trains} - Train {train_number} processing complete!\n")
 
     return trains_data
