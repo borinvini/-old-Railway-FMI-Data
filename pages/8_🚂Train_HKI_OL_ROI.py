@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
 from cross_data.cross_functions import match_train_with_ems, merge_train_weather_data
-from finnish_railway.data_handler import get_trains_by_date, iter_daily_train_data, load_railway_metadata
-from finnish_weather.data_handler import clean_fmi_data, fetch_fmi_data, fetch_fmi_data_by_latlon, iter_daily_fmi_data
+from finnish_railway.data_handler import get_trains_by_date, load_railway_metadata
+from finnish_weather.data_handler import clean_fmi_data, fetch_fmi_data
 from misc.misc_functions import append_dataframe_to_csv, print_memory_usage, save_dataframe_to_csv
 from misc.const import (
     CSV_CROSS_DATA, CSV_CROSS_STATIONS, CSV_FMI, CSV_FMI_EMS, END_DATE,
