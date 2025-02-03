@@ -8,8 +8,17 @@ from misc.const import CSV_CROSS_DATA, FOLDER_NAME
 # Title of the Streamlit App
 st.title("📊 Train & Weather Data Viewer")
 
-# Path to the CSV file inside the output_data folder
-csv_file = os.path.join(FOLDER_NAME, CSV_CROSS_DATA)
+# Add a selectbox to choose a month (from "01" to "12")
+selected_month = st.selectbox(
+    "Select Month",
+    options=[str(i).zfill(2) for i in range(1, 13)],
+    index=0  # default to "01"
+)
+
+# Build the file path based on the selected month.
+# For example, if selected_month is "01", then the file will be "cross_data_01.csv"
+csv_file = os.path.join(FOLDER_NAME, f"cross_data_{selected_month}.csv")
+
 
 try:
     # Load the DataFrame from the CSV file

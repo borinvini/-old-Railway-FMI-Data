@@ -80,7 +80,9 @@ if fetch_data:
         st.error("Error: Start Date must be before or equal to End Date.", icon="🚨")
         st.stop()
 
-    # * === FETCH RAILWAY DATA ===
+    # -------------------------------------------------------------------
+    # FETCH RAILWAY DATA
+    # -------------------------------------------------------------------
 
     # Load station metadata
     base_url = FIN_RAILWAY_BASE_URL
@@ -115,53 +117,60 @@ if fetch_data:
         filtered_trains = trains_data[mask]
         st.success(f"Filtered down to {len(filtered_trains)} trains that pass all required stations.", icon="✅")
 
-        # === ENRICH THE FILTERED TRAIN DATA ===
+        # === ENRICH THE FILTERED TRAIN DATA BY MONTH ===
         if "timeTableRows" in filtered_trains.columns:
             # Create a column to help processing by month
             filtered_trains["departureMonth"] = pd.to_datetime(filtered_trains["departureDate"]).dt.to_period("M")
             months = filtered_trains["departureMonth"].unique()
-            enriched_data = []
+            
+            # Define a function to enrich the timetable rows.
+            def enrich_timetable_row(row):
+                try:
+                    parsed_row = ast.literal_eval(row) if isinstance(row, str) else row
+                    if isinstance(parsed_row, list):
+                        enriched_rows = []
+                        for entry in parsed_row:
+                            # Look up the station name using the station metadata.
+                            station_name = station_metadata.loc[
+                                station_metadata["stationShortCode"] == entry["stationShortCode"],
+                                "stationName"
+                            ]
+                            station_name_value = station_name.iloc[0] if not station_name.empty else None
+                            enriched_entry = {"stationName": station_name_value}
+                            enriched_entry.update(entry)
+                            enriched_rows.append(enriched_entry)
+                        return enriched_rows
+                    return parsed_row
+                except Exception as e:
+                    st.error(f"Error enriching timeTableRows: {e}")
+                    return row
 
+            # Process each month separately.
             for month in months:
                 st.write(f"Enriching data for month: `{month}`. Please wait...")
-                month_data = filtered_trains[filtered_trains["departureMonth"] == month]
-
-                def enrich_timetable_row(row):
-                    try:
-                        parsed_row = ast.literal_eval(row) if isinstance(row, str) else row
-                        if isinstance(parsed_row, list):
-                            enriched_rows = []
-                            for entry in parsed_row:
-                                station_name = station_metadata.loc[
-                                    station_metadata["stationShortCode"] == entry["stationShortCode"],
-                                    "stationName"
-                                ]
-                                station_name_value = station_name.iloc[0] if not station_name.empty else None
-                                enriched_entry = {"stationName": station_name_value}
-                                enriched_entry.update(entry)
-                                enriched_rows.append(enriched_entry)
-                            return enriched_rows
-                        return parsed_row
-                    except Exception as e:
-                        st.error(f"Error enriching timeTableRows: {e}")
-                        return row
-
+                month_data = filtered_trains[filtered_trains["departureMonth"] == month].copy()
+                
+                # Convert the timeTableRows for each row.
                 month_data["timeTableRows"] = month_data["timeTableRows"].apply(enrich_timetable_row)
-                enriched_data.append(month_data)
+                
+                st.success(f"Train data enrichment complete for month: `{month}`.", icon="✅")
+                print_memory_usage(month_data, f"trains_data_enriched_{month}")
 
-            st.success("Train data enrichment complete.", icon="✅")
-            trains_data_enriched = pd.concat(enriched_data, ignore_index=True)
+                # Save the enriched train data for the month to a separate CSV file.
+                # We assume month is a Period; convert it to a two-digit month string.
+                month_str = str(month.month).zfill(2) if hasattr(month, 'month') else str(month).split('-')[1]
+                csv_filename = f"all_trains_data_{month_str}.csv"
+                save_dataframe_to_csv(month_data, csv_filename)
+                st.success(f"Enriched train data for month {month_str} saved to {csv_filename}.", icon="✅")
         else:
             st.error("No 'timeTableRows' column found in the train data.")
-
-        # Save the enriched train data
-        save_dataframe_to_csv(trains_data_enriched, CSV_ALL_TRAINS)
-        print_memory_usage(trains_data_enriched, "trains_data_enriched")
     else:
         st.error("No train data available for the specified date range.", icon="🚨")
         st.stop()
 
+    # -------------------------------------------------------------------
     # * === FETCH FMI WEATHER DATA BY MONTH ===
+    # -------------------------------------------------------------------
 
     all_ems_metadata = []  # List to store station metadata (only once)
     monthly_fmi_data = []  # List to accumulate daily data for the current month
@@ -170,44 +179,38 @@ if fetch_data:
     current_month = current_date.month  # Track the current month
 
     while current_date <= end_date:
-        st.write(f"Fetching FMI data for {current_date}...")
-
-        # Call fetch_fmi_data for the current date with chunk_hours=2
-        daily_fmi_data, daily_ems_metadata = fetch_fmi_data(FMI_BBOX, current_date, chunk_hours=2)
-
-        if not daily_fmi_data.empty:
-            monthly_fmi_data.append(daily_fmi_data)  # Store the day's weather data
-
-            # Store EMS metadata only once (assuming it remains constant)
-            if not all_ems_metadata:
-                all_ems_metadata.append(daily_ems_metadata)
-        else:
-            st.warning(f"No weather data available for {current_date}", icon="⚠️")
-
-        # Check if we've reached a new month or if this is the last day in the range
-        if (current_date.month != current_month) or (current_date == end_date):
+        # Check if the current day is in a new month compared to the accumulator
+        if current_date.month != current_month:
+            # Process the accumulated data for the previous month before moving to the new month
             if monthly_fmi_data:
-                # Combine daily data for the current month
                 fmi_data_month = pd.concat(monthly_fmi_data, ignore_index=True)
                 fmi_data_month = clean_fmi_data(fmi_data_month)
                 
                 st.write(f"Data manipulation completed for month {current_month}.")
-
                 st.success(f"Fetched and processed FMI data for month {current_month}.", icon="✅")
-
-                # Print memory usage for the monthly data
                 print_memory_usage(fmi_data_month, f"fmi_data_month_{current_month}")
-
-                # Append the monthly data to the CSV file
-                append_dataframe_to_csv(fmi_data_month, CSV_FMI)
-
-                # Free the monthly data from memory by resetting the list
+                
+                month_str = str(current_month).zfill(2)
+                csv_filename = f"fmi_weather_observations_{month_str}.csv"
+                save_dataframe_to_csv(fmi_data_month, csv_filename)
+                st.success(f"Monthly FMI data saved to {csv_filename}", icon="✅")
+                
+                # Reset the monthly accumulator for the new month
                 monthly_fmi_data = []
-
-            # Update current_month to the month of the current_date
+            
+            # Update the current_month to the new month before processing the day's data
             current_month = current_date.month
 
-        # Move to the next day
+        st.write(f"Fetching FMI data for {current_date}...")
+        daily_fmi_data, daily_ems_metadata = fetch_fmi_data(FMI_BBOX, current_date, chunk_hours=2)
+        
+        if not daily_fmi_data.empty:
+            monthly_fmi_data.append(daily_fmi_data)
+            if not all_ems_metadata:
+                all_ems_metadata.append(daily_ems_metadata)
+        else:
+            st.warning(f"No weather data available for {current_date}", icon="⚠️")
+        
         current_date += timedelta(days=1)
 
     # Process any remaining data if the loop ended mid-month
@@ -217,13 +220,14 @@ if fetch_data:
         st.write(f"Final data manipulation completed for month {current_month}.")
         st.success(f"Fetched and processed FMI data for month {current_month}.", icon="✅")
         print_memory_usage(fmi_data_month, f"fmi_data_month_{current_month}")
-        append_dataframe_to_csv(fmi_data_month, CSV_FMI)
+        month_str = str(current_month).zfill(2)
+        csv_filename = f"fmi_weather_observations_{month_str}.csv"
+        save_dataframe_to_csv(fmi_data_month, csv_filename)
         monthly_fmi_data = []
 
     # Combine and save EMS metadata (only once)
     if all_ems_metadata:
         ems_metadata_combined = pd.concat(all_ems_metadata, ignore_index=True)
-        # Optionally drop duplicate rows if the same EMS station appears more than once
         ems_metadata_combined.drop_duplicates(inplace=True)
         save_dataframe_to_csv(ems_metadata_combined, CSV_FMI_EMS)
         st.success("Station metadata saved successfully.", icon="✅")
@@ -235,27 +239,60 @@ if fetch_data:
     # -------------------------------------------------------------------
     
     # -------------------------------------------------------------------
-    # Load FMI data from the CSV file into fmi_data_combined
+    # Step 1: Create and save the matched stations DataFrame
     # -------------------------------------------------------------------
-    fmi_file_path = os.path.join(os.getcwd(), FOLDER_NAME, CSV_FMI)
-    fmi_data_combined = pd.read_csv(fmi_file_path)
-    print(f"FMI data loaded from {fmi_file_path} with {len(fmi_data_combined)} rows.")
-
-    # -------------------------------------------------------------------
-    # Proceed with merging data
-    # -------------------------------------------------------------------
-
-    # Create the matched stations DataFrame using your station metadata and EMS metadata.
+    # (Assume station_metadata and ems_metadata_combined are already loaded)
     matched_stations_df = match_train_with_ems(station_metadata, ems_metadata_combined)
     save_dataframe_to_csv(matched_stations_df, CSV_CROSS_STATIONS)
-    print("Matched stations:")
-    print(matched_stations_df.head())
+    st.write("Matched stations:")
+    st.write(matched_stations_df.head())
 
-    # Merge the train data with the FMI data using the matched stations.
-    updated_trains_df = merge_train_weather_data(trains_data, fmi_data_combined, matched_stations_df)
-    save_dataframe_to_csv(updated_trains_df, CSV_CROSS_DATA)
+    # -------------------------------------------------------------------
+    # Step 2: Process monthly data
+    # -------------------------------------------------------------------
+    # We'll loop over the months 1 to 12. For each month, we load the corresponding
+    # train and FMI CSV files, perform the merge, and save the output as a monthly cross data file.
+    for m in range(1, 13):
+        month_str = str(m).zfill(2)  # e.g., "01", "02", etc.
+        trains_file = os.path.join(os.getcwd(), FOLDER_NAME, f"all_trains_data_{month_str}.csv")
+        fmi_file = os.path.join(os.getcwd(), FOLDER_NAME, f"fmi_weather_observations_{month_str}.csv")
+        
+        # Check if both files exist.
+        if os.path.exists(trains_file) and os.path.exists(fmi_file):
+            st.write(f"Processing data for month {month_str}...")
+            
+            # Load the monthly train and FMI data.
+            trains_data_month = pd.read_csv(trains_file)
+            fmi_data_month = pd.read_csv(fmi_file)
+            
+            # (Optional) Convert date/time columns if needed.
+            if "departureDate" in trains_data_month.columns:
+                trains_data_month["departureDate"] = pd.to_datetime(trains_data_month["departureDate"])
+            if "timestamp" in fmi_data_month.columns:
+                fmi_data_month["timestamp"] = pd.to_datetime(fmi_data_month["timestamp"])
+            
+            # ---- Convert "timeTableRows" from string to Python objects ----
+            if "timeTableRows" in trains_data_month.columns:
+                trains_data_month["timeTableRows"] = trains_data_month["timeTableRows"].apply(
+                    lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+                )
+            
+            # Merge the monthly train data with the monthly FMI data using matched stations.
+            cross_data_month = merge_train_weather_data(trains_data_month, fmi_data_month, matched_stations_df)
+            
+            # Optionally, print memory usage for the merged data of the month.
+            print_memory_usage(cross_data_month, f"cross_data_{month_str}")
+            
+            # Save the merged result as cross_data_XX.csv (where XX is the month number)
+            output_filename = f"cross_data_{month_str}.csv"
+            save_dataframe_to_csv(cross_data_month, output_filename)
+            st.success(f"Cross data for month {month_str} saved as {output_filename}.")
+        else:
+            st.warning(f"Data files for month {month_str} not found. Skipping this month.")
+
+    st.success("All monthly cross data processing completed!")
 
     print("EXECUTION COMPLETE!")
-    fmi_data_combined = []
+
 else:
     st.write("Click the button above to fetch new data from the APIs.")

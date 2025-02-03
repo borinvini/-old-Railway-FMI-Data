@@ -77,3 +77,4 @@ def get_trains_by_date(date_str):
     else:
         print(f"No train data found for {date_str}")
         return pd.DataFrame()
+    

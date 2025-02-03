@@ -17,8 +17,16 @@ st.set_page_config(
 # Title of the Streamlit App
 st.title("Train Data Viewer")
 
-# Path to the CSV file
-csv_file = os.path.join(FOLDER_NAME, CSV_ALL_TRAINS)  # Adjust path if necessary
+# Add a selectbox at the top to choose a month (from 01 to 12)
+selected_month = st.selectbox(
+    "Select Month",
+    options=[str(i).zfill(2) for i in range(1, 13)],
+    index=0  # default to "01"
+)
+
+# Build the file name based on the selected month.
+# For example: if selected_month == "01", then file is all_trains_data_01.csv
+csv_file = os.path.join(FOLDER_NAME, f"all_trains_data_{selected_month}.csv")
 train_stations_file = os.path.join(FOLDER_NAME, CSV_TRAIN_STATIONS)
 
 # Session State to Manage Loading and Delay

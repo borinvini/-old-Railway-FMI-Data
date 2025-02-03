@@ -7,8 +7,17 @@ from misc.const import CSV_FMI, FOLDER_NAME
 # Title of the Streamlit App
 st.title("FMI Data Viewer")
 
-# Path to the CSV file
-csv_file = os.path.join(FOLDER_NAME, CSV_FMI)
+# Add a selectbox at the top to choose a month (from "01" to "12")
+selected_month = st.selectbox(
+    "Select Month",
+    options=[str(i).zfill(2) for i in range(1, 13)],
+    index=0  # default to "01"
+)
+
+# Build the file path based on the selected month.
+# For example: if selected_month == "01", then file is fmi_weather_observations_01.csv
+csv_file = os.path.join(FOLDER_NAME, f"fmi_weather_observations_{selected_month}.csv")
+
 
 # Session State to Manage Loading and Delay
 if "show_table" not in st.session_state:
