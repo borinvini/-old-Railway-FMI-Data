@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import streamlit as st
 import ast
-from playsound import playsound
 from datetime import datetime, timedelta
 from fmiopendata.wfs import download_stored_query
 
