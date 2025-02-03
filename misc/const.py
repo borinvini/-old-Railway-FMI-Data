@@ -5,7 +5,8 @@ CATEGORY = "All Categories"
 OPERATOR = "All Operators"
 
 # 
-FMI_BBOX = "18,55,35,75" # Bounding box for Finland
+#FMI_BBOX = "18,55,35,75" # Bounding box for Finland
+FMI_BBOX = "20.8,59.4,27.2,67.6"
 
 # URLs for the Finnish Meteorological Institute API
 FMI_OBSERVATIONS = "fmi::observations::weather::multipointcoverage"

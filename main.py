@@ -177,7 +177,6 @@ if fetch_data:
 
         # Call fetch_fmi_data for the current date
         daily_fmi_data, daily_ems_metadata = fetch_fmi_data(FMI_BBOX, current_date)
-
         if not daily_fmi_data.empty:
             all_fmi_data.append(daily_fmi_data)  # Store the retrieved weather data
 

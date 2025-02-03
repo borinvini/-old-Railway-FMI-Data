@@ -73,7 +73,7 @@ try:
                 weather_data = []
                 for row in timetable_data:
                     weather = row.get("weather_observations", {})
-                    weather["stationName"] = row.get("stationName", "Unknown")  # Add station name
+                    weather["stationShortCode"] = row.get("stationShortCode", "Unknown")  # Add station name
                     weather["scheduledTime"] = row.get("scheduledTime", "Unknown")  # Add scheduled time
                     weather_data.append(weather)
 
@@ -81,9 +81,9 @@ try:
                 weather_df = pd.DataFrame(weather_data)
 
                 if not weather_df.empty:
-                    # **Reorder columns: stationName first, scheduledTime second, rest follows**
-                    column_order = ["stationName", "scheduledTime"] + [
-                        col for col in weather_df.columns if col not in ["stationName", "scheduledTime"]
+                    # **Reorder columns: stationShortCode first, scheduledTime second, rest follows**
+                    column_order = ["stationShortCode", "scheduledTime"] + [
+                        col for col in weather_df.columns if col not in ["stationShortCode", "scheduledTime"]
                     ]
                     weather_df = weather_df[column_order]
 

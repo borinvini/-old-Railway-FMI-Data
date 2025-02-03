@@ -22,6 +22,33 @@ def save_dataframe_to_csv(df, csv_file):
     except Exception as e:
         print(f"Error saving DataFrame to {csv_file}: {e}")
 
+def append_dataframe_to_csv(df, csv_file):
+    """
+    Append the rows of a DataFrame to an existing CSV file in the output_data folder.
+    If the file does not exist, it creates the file with headers.
+    
+    Args:
+        df (pd.DataFrame): The DataFrame whose rows should be appended.
+        csv_file (str): The name of the CSV file.
+    """
+    try:
+        # Define the output directory and file path.
+        output_dir = os.path.join(os.getcwd(), FOLDER_NAME)
+        os.makedirs(output_dir, exist_ok=True)
+        csv_file_path = os.path.join(output_dir, csv_file)
+        
+        # Check if the file already exists.
+        if os.path.exists(csv_file_path):
+            # Append without writing the header.
+            df.to_csv(csv_file_path, mode='a', index=False, header=False)
+            print(f"Data appended to {csv_file_path}")
+        else:
+            # File doesn't exist, so write with header.
+            df.to_csv(csv_file_path, index=False, header=True)
+            print(f"DataFrame saved to new file {csv_file_path}")
+    except Exception as e:
+        print(f"Error appending DataFrame to {csv_file}: {e}")
+
 def print_memory_usage(dataframe, dataframe_name):
     """
     Display the memory usage of a DataFrame in Streamlit, along with its name.
